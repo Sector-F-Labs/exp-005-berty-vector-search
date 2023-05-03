@@ -1,0 +1,15 @@
+version: '3.5'
+
+services:
+  milvus:
+    image: milvusdb/milvus:latest
+    container_name: milvus
+    ports:
+      - "19530:19530"
+      - "19121:19121"
+    volumes:
+      - ./milvus/db:/var/lib/milvus/db
+      - ./milvus/conf:/var/lib/milvus/conf
+      - ./milvus/logs:/var/lib/milvus/logs
+      - ./milvus/wal:/var/lib/milvus/wal
+    command: ["bin/milvus", "run", "server", "-X", "deploy.mode=standalone"]
