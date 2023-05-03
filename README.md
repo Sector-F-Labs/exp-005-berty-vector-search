@@ -28,3 +28,4 @@ The method of this experiment is to create a simple application that uses BERT t
 
 ## Alternatives
 https://github.com/weaviate/weaviate
+https://docs.pinecone.io/reference/update
