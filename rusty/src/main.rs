@@ -1,66 +1,123 @@
-use milvus::index::{IndexParams, IndexType};
-use milvus::schema::CollectionSchemaBuilder;
-use milvus::{
-    client::Client, collection::Collection, data::FieldColumn, error::Error, schema::FieldSchema,
+use rust_bert::bert::BertEncoder;
+use rust_bert::pipelines::sentence_embeddings::{
+    SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType,
 };
-use std::collections::HashMap;
+use rust_bert::pipelines::sequence_classification::SequenceClassificationModel;
+use rust_bert::RustBertError;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::Read;
+use std::path::Path;
 
-use rand::prelude::*;
+use redis::Commands;
+use serde_json;
 
-const DEFAULT_VEC_FIELD: &str = "embed";
+fn read_text_files(directory: &Path) -> Vec<String> {
+    let mut texts = Vec::new();
+    if directory.is_dir() {
+        for entry in fs::read_dir(directory).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
 
-#[tokio::main]
-async fn main() -> Result<(), Error> {
-    const URL: &str = "http://localhost:19530";
-
-    let client = Client::new(URL).await?;
-
-    let schema =
-        CollectionSchemaBuilder::new("hello_milvus", "a guide example for milvus rust SDK")
-            .add_field(FieldSchema::new_primary_int64("id", "", true))
-            .add_field(FieldSchema::new_float_vector(DEFAULT_VEC_FIELD, "", 256))
-            .build()?;
-    let collection = client.create_collection(schema.clone(), None).await?;
-
-    if let Err(err) = hello_milvus(&collection).await {
-        println!("failed to run hello milvus: {:?}", err);
+            if path.extension().unwrap() == "txt" {
+                let mut text = String::new();
+                let mut file = fs::File::open(path).unwrap();
+                file.read_to_string(&mut text).unwrap();
+                texts.push(text);
+            }
+        }
     }
-    collection.drop().await?;
+    texts
+}
 
+#[derive(Debug, Serialize, Deserialize)]
+struct BERTEmbedding {
+    pub values: Vec<f32>,
+}
+
+fn create_bert_embeddings(texts: &[String]) -> Result<Vec<BERTEmbedding>, RustBertError> {
+    let model = SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2)
+        .create_model()?;
+
+    let embeddings = model.encode(texts)?;
+
+    let ebd = embeddings
+        .into_iter()
+        .map(|e| BERTEmbedding { values: e })
+        .collect();
+
+    Ok(ebd)
+}
+
+fn store_embeddings_in_redis(
+    redis_connection: &mut redis::Connection,
+    texts: &[String],
+    embeddinbgs: &[BERTEmbedding],
+) -> redis::RedisResult<()> {
+    for (i, (text, embedding)) in texts.iter().zip(embeddinbgs).enumerate() {
+        let key = format!("embedding:{}", i);
+        let embedding_json = serde_json::to_string(embedding).unwrap();
+        let _: () = redis_connection.hset(&key, "text", text)?;
+        let _: () = redis_connection.hset(&key, "embedding", &embedding_json)?;
+    }
     Ok(())
 }
 
-async fn hello_milvus(collection: &Collection) -> Result<(), Error> {
-    let mut embed_data = Vec::<f32>::new();
-    for _ in 1..=256 * 1000 {
-        let mut rng = rand::thread_rng();
-        let embed = rng.gen();
-        embed_data.push(embed);
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let dot_product: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+    let magnitude_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let magnitude_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    dot_product / (magnitude_a * magnitude_b)
+}
+
+fn retrieve_documents_and_compute_similarity(
+    conn: &mut redis::Connection,
+    query_embedding: &BERTEmbedding,
+) -> redis::RedisResult<Vec<(String, f32)>> {
+    let document_keys: Vec<String> = conn.keys("document:*")?;
+    let mut document_similarity_scores: Vec<(String, f32)> = Vec::new();
+
+    for key in document_keys {
+        let document: BERTEmbedding = {
+            let embedding_json: String = conn.hget(&key, "embedding")?;
+            serde_json::from_str(&embedding_json).unwrap()
+        };
+        let similarity = cosine_similarity(&query_embedding.values, &document.values);
+        let text: String = conn.hget(&key, "text")?;
+        document_similarity_scores.push((text, similarity));
     }
-    let embed_column = FieldColumn::new(
-        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
-        embed_data,
-    );
 
-    collection.insert(vec![embed_column], None).await?;
-    collection.flush().await?;
-    let index_params = IndexParams::new(
-        "feature_index".to_owned(),
-        IndexType::IvfFlat,
-        milvus::index::MetricType::L2,
-        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
-    );
-    collection
-        .create_index(DEFAULT_VEC_FIELD, index_params)
-        .await?;
-    collection.load(1).await?;
+    Ok(document_similarity_scores)
+}
 
-    let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
+fn main() {
+    // Result<(), Error> {
+    const URL: &str = "redis://127.0.0.1/";
 
-    println!(
-        "result num: {}",
-        result.first().map(|c| c.len()).unwrap_or(0),
-    );
+    // Read the text files
+    let directory = Path::new("./texts");
+    let texts = read_text_files(&directory);
 
-    Ok(())
+    let embeddings = create_bert_embeddings(texts.as_slice()).unwrap();
+
+    // Connect to Redis
+    let client = redis::Client::open(URL).unwrap();
+    let mut redis_connection = client.get_connection().unwrap();
+
+    match store_embeddings_in_redis(&mut redis_connection, &texts, &embeddings) {
+        Ok(_) => println!("Stored embeddings in Redis"),
+        Err(e) => println!("Error storing embeddings in Redis: {}", e),
+    }
+
+    /// Lets do some query examples now
+    ///
+    let query = "Contains console.log()";
+    let query_embeddings = create_bert_embeddings(&[query.to_owned()]).unwrap();
+    let query_embedding = &query_embeddings[0];
+
+    let scores =
+        retrieve_documents_and_compute_similarity(&mut redis_connection, query_embedding).unwrap();
+
+    println!("scores: {:?}", scores);
+    // Ok(())
 }
