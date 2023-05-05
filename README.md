@@ -13,27 +13,17 @@ The method of this experiment is to create a simple application that uses BERT t
 
 ## Findings for Rust
 
-Rust provides support for BERT models through the `rust-bert` library, which allows easy interaction with pre-trained models. However, the library is still maturing and may have some limitations compared to more established options like the Hugging Face Transformers library in Python. Working with Redis in Rust is straightforward using the `redis` crate.
+Rust provides support for BERT models through the `rust-bert` library, which allows easy interaction with pre-trained models and even remote downloading. However, the libraries for interacting with different vector database implementations are still maturing and may have some limitations compared to more established options in other languages.
 
-```rust
-// Add your Rust findings here.
-```
 
 ## Findings for Go
 
-Go has a well-supported library for interacting with Redis, called `redisearch-go`. While there are no mature libraries for working with BERT models directly in Go, you can use TensorFlow or ONNX to load and use pre-trained BERT models. Alternatively, you can use an external service for generating embeddings.
+Go has a well-supported libraries for interacting with vector databases. While there are no mature libraries for working with BERT models directly in Go, you can use TensorFlow or ONNX to load and use pre-trained BERT models. Alternatively, you can use an external service for generating embeddings.
 
-```go
-// Add your Go findings here.
-```
 
 ## Conclusion
 
 Based on the findings, Rust and Go both have their advantages and disadvantages when working with BERT embeddings and vector databases. Rust has better support for BERT models, while Go has more mature libraries for database interactions.
-
-```markdown
-// Add your conclusion here.
-```
 
 ## Database Alternatives
 
