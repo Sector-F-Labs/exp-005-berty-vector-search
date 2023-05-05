@@ -1,5 +1,5 @@
 [package]
-name = "rusty-berty-milvus"
+name = "rusty"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,3 +12,4 @@ redis = "0.23.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tch = "0.10.1"
+md5 = "0.7.0"

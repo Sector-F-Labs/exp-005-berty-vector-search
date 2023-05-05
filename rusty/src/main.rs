@@ -1,8 +1,7 @@
-use rust_bert::bert::BertEncoder;
 use rust_bert::pipelines::sentence_embeddings::{
     SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType,
 };
-use rust_bert::pipelines::sequence_classification::SequenceClassificationModel;
+
 use rust_bert::RustBertError;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -55,10 +54,15 @@ fn store_embeddings_in_redis(
     embeddinbgs: &[BERTEmbedding],
 ) -> redis::RedisResult<()> {
     for (i, (text, embedding)) in texts.iter().zip(embeddinbgs).enumerate() {
-        let key = format!("embedding:{}", i);
+        //md5 hash of the text
+        let hash = md5::compute(text);
+
+        let key = format!("embedding:{:x}", hash);
         let embedding_json = serde_json::to_string(embedding).unwrap();
         let _: () = redis_connection.hset(&key, "text", text)?;
         let _: () = redis_connection.hset(&key, "embedding", &embedding_json)?;
+
+        println!("Stored embedding for document {} with key {}", i, key);
     }
     Ok(())
 }
@@ -74,7 +78,8 @@ fn retrieve_documents_and_compute_similarity(
     conn: &mut redis::Connection,
     query_embedding: &BERTEmbedding,
 ) -> redis::RedisResult<Vec<(String, f32)>> {
-    let document_keys: Vec<String> = conn.keys("document:*")?;
+    let document_keys: Vec<String> = conn.keys("embedding:*")?;
+    println!("document_keys: {:?}", document_keys);
     let mut document_similarity_scores: Vec<(String, f32)> = Vec::new();
 
     for key in document_keys {
@@ -109,9 +114,7 @@ fn main() {
         Err(e) => println!("Error storing embeddings in Redis: {}", e),
     }
 
-    /// Lets do some query examples now
-    ///
-    let query = "Contains console.log()";
+    let query = "console.log()";
     let query_embeddings = create_bert_embeddings(&[query.to_owned()]).unwrap();
     let query_embedding = &query_embeddings[0];
 
