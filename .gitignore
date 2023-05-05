@@ -16,3 +16,6 @@ Cargo.lock
 
 # docker volumes
 milvus
+
+# models
+models

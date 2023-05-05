@@ -44,3 +44,12 @@ Based on the findings, Rust and Go both have their advantages and disadvantages 
 2. Pinecone: A managed vector database service that allows you to build, scale, and deploy applications using vector search.
    - Website: https://www.pinecone.io/
    - Documentation: https://docs.pinecone.io/reference/update
+
+
+
+# Setup
+
+You need to set up the following environment variables to share models
+```
+RUSTBERT_CACHE=/my/model/locaction
+```
