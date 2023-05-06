@@ -1,0 +1,34 @@
+This is a test file that contains some code
+
+```
+fn main() {
+    // Result<(), Error> {
+    const URL: &str = "redis://127.0.0.1/";
+
+    // Read the text files
+    let directory = Path::new("./texts");
+    let texts = read_text_files(&directory);
+
+    let embeddings = create_bert_embeddings(texts.as_slice()).unwrap();
+
+    // Connect to Redis
+    let client = redis::Client::open(URL).unwrap();
+    let mut redis_connection = client.get_connection().unwrap();
+
+    match store_embeddings_in_redis(&mut redis_connection, &texts, &embeddings) {
+        Ok(_) => println!("Stored embeddings in Redis"),
+        Err(e) => println!("Error storing embeddings in Redis: {}", e),
+    }
+
+    let query = "console.log()";
+    let query_embeddings = create_bert_embeddings(&[query.to_owned()]).unwrap();
+    let query_embedding = &query_embeddings[0];
+
+    let scores =
+        retrieve_documents_and_compute_similarity(&mut redis_connection, query_embedding).unwrap();
+
+    println!("scores: {:?}", scores);
+    // Ok(())
+}
+
+```

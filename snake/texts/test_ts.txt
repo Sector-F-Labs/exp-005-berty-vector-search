@@ -1,0 +1,21 @@
+This is some code
+
+```
+
+const main = async () => {
+    const directory = path.join(__dirname, 'texts');
+    const texts = readTextFiles(directory);
+    const embeddings = await createBertEmbeddings(texts);
+    
+    const redisClient = createClient();
+    await storeEmbeddingsInRedis(redisClient as RedisClientType, texts, embeddings);
+    
+    const query = 'I like to eat apples and bananas';
+    const queryEmbedding = await createBertEmbeddings([query]);
+    const documentSimilarityScores = await retrieveDocumentsAndComputeSimilarity(redisClient as RedisClientType, queryEmbedding[0]);
+    
+    documentSimilarityScores.sort((a, b) => b.similarity - a.similarity);
+    console.log(documentSimilarityScores);
+}
+main();
+```

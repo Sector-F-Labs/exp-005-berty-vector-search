@@ -1,0 +1,26 @@
+Here is some code
+
+
+```
+func createBERTEmbeddings(texts []string) ([]BERTEmbedding, error) {
+	// Implement BERT embeddings retrieval using an appropriate package
+	// The embeddings should be of type []float32
+
+	path := os.Getenv("RUSTBERT_CACHE")
+	m, err := model.NewEmbeddings(path)
+	if err != nil {
+		panic(err)
+	}
+	res, err := m.PredictValues(texts...)
+	if err != nil {
+		panic(err)
+	}
+
+	var embeddings []BERTEmbedding
+	for _, r := range res {
+		embeddings = append(embeddings, BERTEmbedding{r})
+	}
+
+	return embeddings, nil
+}
+```
