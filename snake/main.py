@@ -3,7 +3,6 @@ import glob
 import hashlib
 import json
 import textwrap
-import numpy as np
 import redis
 from transformers import AutoTokenizer, AutoModel
 from torch.nn.functional import normalize
@@ -50,13 +49,32 @@ def store_embeddings_in_redis(redis_connection, texts, embeddings):
 
 def cosine_similarity(a, b):
     try:
-        dot_product = np.dot(a, b)
-        magnitude_a = np.linalg.norm(a)
-        magnitude_b = np.linalg.norm(b)
+        # Calculate the dot product of vectors a and b
+        # Multiply each item in array 'a' with the corresponding item in array 'b' and then sum them
+        dot_product = sum(ai * bi for ai, bi in zip(a, b))
+
+        # Calculate the magnitude (Euclidean norm) of vector a
+        # Square each item in array 'a', sum the squared values, and then take the square root of the sum
+        magnitude_a = (sum(ai ** 2 for ai in a)) ** 0.5
+
+        # Calculate the magnitude (Euclidean norm) of vector b
+        # Square each item in array 'b', sum the squared values, and then take the square root of the sum
+        magnitude_b = (sum(bi ** 2 for bi in b)) ** 0.5
+
+        # Calculate the cosine similarity as the dot product divided by the product of magnitudes
+        # Divide the dot product by the product of the magnitudes of vectors 'a' and 'b'
         return dot_product / (magnitude_a * magnitude_b)
     except Exception as e:
         print('Error computing cosine similarity:', e)
         return -1
+
+
+# Example usage:
+a = [1, 2, 3]
+b = [4, 5, 6]
+
+similarity = cosine_similarity(a, b)
+print('Cosine similarity:', similarity)
 
 
 def retrieve_documents_and_compute_similarity(redis_connection, query_embedding):
