@@ -11,6 +11,19 @@ use std::path::Path;
 use redis::Commands;
 use serde_json;
 
+mod compare;
+
+use crate::compare::cosine_similarity;
+
+#[macro_use]
+extern crate rustacuda;
+
+#[macro_use]
+extern crate rustacuda_derive;
+
+extern crate rustacuda_core;
+
+
 fn read_text_files(directory: &Path) -> Vec<String> {
     let mut texts = Vec::new();
     if directory.is_dir() {
@@ -67,12 +80,6 @@ fn store_embeddings_in_redis(
     Ok(())
 }
 
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    let dot_product: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-    let magnitude_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let magnitude_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    dot_product / (magnitude_a * magnitude_b)
-}
 
 fn retrieve_documents_and_compute_similarity(
     conn: &mut redis::Connection,
@@ -103,11 +110,21 @@ fn main() {
     let directory = Path::new("./texts");
     let texts = read_text_files(&directory);
 
-    let embeddings = create_bert_embeddings(texts.as_slice()).unwrap();
+    let embeddings = match create_bert_embeddings(texts.as_slice()) {
+        Ok(e) => e,
+        Err(e) => panic!("Error creating embeddings: {}", e),
+    };
 
     // Connect to Redis
-    let client = redis::Client::open(URL).unwrap();
-    let mut redis_connection = client.get_connection().unwrap();
+    let client = match redis::Client::open(URL) {
+        Ok(c) => c,
+        Err(e) => panic!("Error opening Redis: {}", e),
+    };
+
+    let mut redis_connection = match client.get_connection() {
+        Ok(c) => c,
+        Err(e) => panic!("Error connecting to Redis: {}", e),
+    };
 
     match store_embeddings_in_redis(&mut redis_connection, &texts, &embeddings) {
         Ok(_) => println!("Stored embeddings in Redis"),
